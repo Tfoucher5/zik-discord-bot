@@ -21,7 +21,11 @@ export function joinVoice(channel) {
   let stuckTimer = null;
   let rejoinCount = 0;
 
-  connection.on('debug', (msg) => console.log('[VoiceDebug]', msg));
+  // Filtrer pour ne garder que les messages critiques (WS URL, erreurs, codes de fermeture)
+  connection.on('debug', (msg) => {
+    if (/error|close|fail|exception|ws\s|wss:|endpoint/i.test(msg))
+      console.log('[VoiceDebug]', msg);
+  });
 
   connection.on('stateChange', (oldState, newState) => {
     console.log(`[Connexion] ${oldState.status} => ${newState.status}`);

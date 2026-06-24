@@ -27,7 +27,17 @@ for (const cmd of [linkCmd, statsCmd, classementCmd, roomsCmd, zikStartCmd, zikS
   client.commands.set(cmd.name, cmd);
 }
 
-client.once('clientReady', () => console.log(`Bot en ligne : ${client.user.tag}`));
+client.once('clientReady', () => {
+  console.log(`Bot en ligne : ${client.user.tag}`);
+  // Log chaque message vocal brut reçu de Discord
+  client.ws.on('VOICE_SERVER_UPDATE', (d) =>
+    console.log(`[VSU] guild=${d.guild_id} endpoint=${d.endpoint ?? 'NULL'} token=${d.token ? 'ok' : 'MISSING'}`)
+  );
+  client.ws.on('VOICE_STATE_UPDATE', (d) => {
+    if (d.user_id === client.user.id)
+      console.log(`[VSUP] session=${d.session_id} channel=${d.channel_id}`);
+  });
+});
 
 client.on('error', (err) => console.error('[Client Error]:', err.message));
 
