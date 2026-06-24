@@ -13,8 +13,10 @@ export default {
       return;
     }
 
-    if (interaction.user.id !== state.hostId) {
-      await interaction.reply({ content: 'Seul l\'hôte peut arrêter la partie.', ephemeral: true });
+    const isHost = interaction.user.id === state.hostId;
+    const isAdmin = interaction.member.permissions.has('Administrator');
+    if (!isHost && !isAdmin) {
+      await interaction.reply({ content: 'Seul l\'hôte ou un administrateur peut arrêter la partie.', ephemeral: true });
       return;
     }
 
