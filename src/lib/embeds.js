@@ -36,12 +36,12 @@ export function buildStatsEmbed(profile, page) {
       { name: 'Parties jouées',  value: String(stats?.games_played ?? 0), inline: true },
       { name: 'Score moyen',     value: String(stats?.avg_score ?? 0),    inline: true },
       { name: 'Meilleur score',  value: String(stats?.best_score ?? 0),   inline: true },
-      { name: 'Top rang obtenu', value: stats?.best_rank ? `${rankEmoji(stats.best_rank - 1)} ${stats.best_rank}er` : '–', inline: true },
+      { name: 'Top rang obtenu', value: stats?.best_rank ? `${rankEmoji(stats.best_rank - 1)} ${stats.best_rank === 1 ? '1er' : `${stats.best_rank}ème`}` : '–', inline: true },
     );
 }
 
 export function buildClassementEmbed(rows, label, page, totalPages) {
-  const lines = rows.map((r, i) => `${rankEmoji(i)} **${r.username}** — ${r.total_score?.toLocaleString('fr')} pts`);
+  const lines = rows.map((r, i) => `${rankEmoji(i)} **${r.username}** — ${(r.total_score ?? r.score ?? 0).toLocaleString('fr')} pts`);
   return new EmbedBuilder()
     .setTitle(`🏆 Classement ZIK${label ? ' — ' + label : ''}`)
     .setDescription(lines.join('\n') || 'Aucun résultat.')

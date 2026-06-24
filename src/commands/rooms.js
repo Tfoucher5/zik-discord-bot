@@ -3,7 +3,6 @@ import supabase from '../lib/supabase.js';
 import { buildRoomsEmbed } from '../lib/embeds.js';
 
 const PAGE_SIZE = 5;
-const ACTIVE_THRESHOLD = '10 minutes';
 
 async function fetchRooms(search) {
   const since = new Date(Date.now() - 10 * 60 * 1000).toISOString();

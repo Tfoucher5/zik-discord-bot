@@ -49,16 +49,16 @@ function buildRow(page, totalPages) {
 export default {
   name: 'classement',
   async execute(interaction) {
-    await interaction.deferReply();
-
     const roomCode = interaction.options.getString('room');
     const mode = interaction.options.getString('mode');
 
     const allRows = await fetchLeaderboard(roomCode, mode);
     if (allRows === null) {
-      await interaction.editReply({ content: `Room \`${roomCode}\` introuvable.`, ephemeral: true });
+      await interaction.reply({ content: `Room \`${roomCode}\` introuvable.`, ephemeral: true });
       return;
     }
+
+    await interaction.deferReply();
 
     const totalPages = Math.max(1, Math.ceil(allRows.length / PAGE_SIZE));
     let page = 0;
