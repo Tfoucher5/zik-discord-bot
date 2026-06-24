@@ -1,18 +1,33 @@
-import { Client, GatewayIntentBits, Collection } from 'discord.js';
+import { Client, GatewayIntentBits, Collection, Partials } from 'discord.js';
 import 'dotenv/config';
 import linkCmd from './commands/link.js';
 import statsCmd from './commands/stats.js';
 import classementCmd from './commands/classement.js';
 import roomsCmd from './commands/rooms.js';
+import zikStartCmd, { handleDmAnswer } from './commands/zik-start.js';
+import zikStopCmd from './commands/zik-stop.js';
+import zikSkipCmd from './commands/zik-skip.js';
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.DirectMessages,
+  ],
+  partials: [Partials.Channel], // nécessaire pour recevoir les DMs
+});
 
 client.commands = new Collection();
-for (const cmd of [linkCmd, statsCmd, classementCmd, roomsCmd]) {
+for (const cmd of [linkCmd, statsCmd, classementCmd, roomsCmd, zikStartCmd, zikStopCmd, zikSkipCmd]) {
   client.commands.set(cmd.name, cmd);
 }
 
 client.on('ready', () => console.log(`Bot en ligne : ${client.user.tag}`));
+
+client.on('messageCreate', async (msg) => {
+  if (msg.author.bot || msg.guild) return; // DMs uniquement
+  await handleDmAnswer(msg);
+});
 
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;

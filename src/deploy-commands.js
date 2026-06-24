@@ -49,6 +49,28 @@ const commands = [
       required: false,
     }],
   },
+  {
+    name: 'zik-start',
+    description: 'Lance une partie de Blind Test dans ton salon vocal',
+    options: [
+      {
+        name: 'playlist',
+        description: 'Nom de la playlist (optionnel)',
+        type: 3, // STRING
+        required: false,
+      },
+      {
+        name: 'rounds',
+        description: 'Nombre de rounds (1–20, défaut: 10)',
+        type: 4, // INTEGER
+        required: false,
+        min_value: 1,
+        max_value: 20,
+      },
+    ],
+  },
+  { name: 'zik-stop', description: 'Arrête la partie en cours' },
+  { name: 'zik-skip', description: 'Voter pour passer le round actuel' },
 ];
 
 const rest = new REST().setToken(process.env.DISCORD_TOKEN);
