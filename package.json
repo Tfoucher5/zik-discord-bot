@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "node src/index.js",
+    "start": "node --dns-result-order=ipv4first src/index.js",
     "deploy": "node src/deploy-commands.js",
     "test": "vitest run",
     "test:watch": "vitest"

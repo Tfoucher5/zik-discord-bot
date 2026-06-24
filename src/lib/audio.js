@@ -21,6 +21,8 @@ export function joinVoice(channel) {
   let stuckTimer = null;
   let rejoinCount = 0;
 
+  connection.on('debug', (msg) => console.log('[VoiceDebug]', msg));
+
   connection.on('stateChange', (oldState, newState) => {
     console.log(`[Connexion] ${oldState.status} => ${newState.status}`);
     clearTimeout(stuckTimer);

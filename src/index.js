@@ -1,3 +1,6 @@
+import dns from 'node:dns';
+dns.setDefaultResultOrder('ipv4first');
+
 import { Client, GatewayIntentBits, Collection, MessageFlags } from 'discord.js';
 import 'dotenv/config';
 import linkCmd from './commands/link.js';
