@@ -157,7 +157,7 @@ export async function handleDmAnswer(msg) {
   if (result.allFound) {
     clearTimeout(state.roundTimeout);
     const track = state.tracks[state.currentRound - 1];
-    await revealRound(state, state._guildId, thread, track);
+    await revealRound(state, guildId, thread, track);
   }
 }
 
@@ -344,9 +344,13 @@ async function startWithPlaylist(interaction, guildId, voiceChannel, playlist, t
     readySet.add(btn.user.id);
     await btn.reply({ content: '✅ Tu es prêt !', ephemeral: true });
 
-    const updatedEmbed = EmbedBuilder.from(lobbyEmbed).setDescription(
-      lobbyEmbed.data.description.replace(/\d+\/${state.players.size} prêts/, `${readySet.size}/${state.players.size} prêts`)
+    const currentDesc = lobbyEmbed.data.description ?? '';
+    const updatedDesc = currentDesc.replace(
+      /\d+\/\d+ prêts/,
+      `${readySet.size}/${state.players.size} prêts`
     );
+    const updatedEmbed = EmbedBuilder.from(lobbyEmbed).setDescription(updatedDesc);
+    lobbyEmbed.setDescription(updatedDesc); // met à jour pour le prochain clic
     await lobbyMsg.edit({ embeds: [updatedEmbed] });
 
     if (readySet.size >= state.players.size) await startGame();

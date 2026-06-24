@@ -41,7 +41,7 @@ describe('submitAnswer', () => {
   it('valide une réponse correcte et calcule les points', () => {
     const state = createGame('guild3', 'host1', 't1', 'v1', TRACKS, 2);
     addPlayer(state, 'user1', 'Theo', null, {});
-    state.currentRound = 0;
+    state.currentRound = 1;
     // Simuler 5 secondes écoulées
     state.roundStartedAt = new Date(Date.now() - 5000);
     const result = submitAnswer(state, 'user1', 'Bohemian Rhapsody');
@@ -54,7 +54,7 @@ describe('submitAnswer', () => {
   it('rejette une réponse incorrecte', () => {
     const state = createGame('guild4', 'host1', 't1', 'v1', TRACKS, 2);
     addPlayer(state, 'user1', 'Theo', null, {});
-    state.currentRound = 0;
+    state.currentRound = 1;
     state.roundStartedAt = new Date();
     const result = submitAnswer(state, 'user1', 'blablabla faux');
     expect(result.correct).toBe(false);
@@ -64,7 +64,7 @@ describe('submitAnswer', () => {
   it('ignore une seconde réponse d\'un joueur qui a déjà trouvé', () => {
     const state = createGame('guild5', 'host1', 't1', 'v1', TRACKS, 2);
     addPlayer(state, 'user1', 'Theo', null, {});
-    state.currentRound = 0;
+    state.currentRound = 1;
     state.roundStartedAt = new Date();
     submitAnswer(state, 'user1', 'Bohemian Rhapsody');
     const result2 = submitAnswer(state, 'user1', 'Bohemian Rhapsody');

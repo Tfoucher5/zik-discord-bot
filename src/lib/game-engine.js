@@ -38,7 +38,7 @@ export function submitAnswer(state, discordUserId, answer) {
   const player = state.players.get(discordUserId);
   if (!player || player.hasAnswered) return null;
 
-  const track = state.tracks[state.currentRound];
+  const track = state.tracks[state.currentRound - 1];
   if (!isCorrect(answer, track)) return { correct: false, points: 0 };
 
   const secondsElapsed = state.roundStartedAt
@@ -99,12 +99,14 @@ export async function endGame(state, guildId) {
         }))
       );
 
-      for (const p of players.filter(p => p.zikUserId)) {
-        await supabase.rpc('update_player_stats_discord', {
-          p_user_id: p.zikUserId,
-          p_score: p.score,
-        });
-      }
+      await Promise.all(
+        players
+          .filter(p => p.zikUserId)
+          .map(p => supabase.rpc('update_player_stats_discord', {
+            p_user_id: p.zikUserId,
+            p_score: p.score,
+          }))
+      );
     }
   } catch (err) {
     console.error('[endGame] Erreur BDD :', err);

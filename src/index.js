@@ -49,7 +49,9 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
   if (!oldState.channelId || newState.channelId) return; // quelqu'un a quitté
   const guildId = oldState.guild.id;
   const state = activeGames.get(guildId);
-  if (!state || !state.players.has(oldState.member.id)) return;
+  if (!state) return;
+  if (oldState.channelId !== state.voiceChannelId) return;
+  if (!state.players.has(oldState.member.id)) return;
 
   const voiceChannel = oldState.channel;
   const remainingPlayers = [...voiceChannel.members.values()].filter(m =>

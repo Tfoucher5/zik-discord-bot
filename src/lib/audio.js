@@ -30,7 +30,7 @@ export async function playPreview(player, previewUrl) {
 }
 
 export function stopAudio(player) {
-  player.stop(true);
+  if (player) player.stop(true);
 }
 
 export function leaveVoice(connection) {
