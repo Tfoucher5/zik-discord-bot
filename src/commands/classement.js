@@ -1,4 +1,4 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
 import supabase from '../lib/supabase.js';
 import { buildClassementEmbed } from '../lib/embeds.js';
 
@@ -48,13 +48,25 @@ function buildRow(page, totalPages) {
 
 export default {
   name: 'classement',
+  async autocomplete(interaction) {
+    const focused = interaction.options.getFocused();
+    const { data } = await supabase
+      .from('rooms')
+      .select('name, code')
+      .eq('is_public', true)
+      .ilike('name', `%${focused}%`)
+      .limit(25);
+    await interaction.respond(
+      (data ?? []).map(r => ({ name: `${r.name} (${r.code})`, value: r.code }))
+    );
+  },
   async execute(interaction) {
     const roomCode = interaction.options.getString('room');
     const mode = interaction.options.getString('mode');
 
     const allRows = await fetchLeaderboard(roomCode, mode);
     if (allRows === null) {
-      await interaction.reply({ content: `Room \`${roomCode}\` introuvable.`, ephemeral: true });
+      await interaction.reply({ content: `Room \`${roomCode}\` introuvable.`, flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -78,7 +90,7 @@ export default {
     const collector = msg.createMessageComponentCollector({ time: 120_000 });
     collector.on('collect', async (btn) => {
       if (btn.user.id !== interaction.user.id) {
-        await btn.reply({ content: 'Ce n\'est pas ta commande.', ephemeral: true });
+        await btn.reply({ content: 'Ce n\'est pas ta commande.', flags: MessageFlags.Ephemeral });
         return;
       }
       if (btn.customId === 'cl_prev' && page > 0) page--;

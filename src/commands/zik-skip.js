@@ -1,3 +1,4 @@
+import { MessageFlags } from 'discord.js';
 import { activeGames } from '../lib/game-engine.js';
 
 export default {
@@ -7,12 +8,12 @@ export default {
     const state = activeGames.get(guildId);
 
     if (!state) {
-      await interaction.reply({ content: 'Aucune partie en cours sur ce serveur.', ephemeral: true });
+      await interaction.reply({ content: 'Aucune partie en cours sur ce serveur.', flags: MessageFlags.Ephemeral });
       return;
     }
 
     if (!state.players.has(interaction.user.id)) {
-      await interaction.reply({ content: 'Tu ne participes pas à cette partie.', ephemeral: true });
+      await interaction.reply({ content: 'Tu ne participes pas à cette partie.', flags: MessageFlags.Ephemeral });
       return;
     }
 

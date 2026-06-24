@@ -1,4 +1,4 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
 import supabase from '../lib/supabase.js';
 import { buildStatsEmbed } from '../lib/embeds.js';
 
@@ -46,7 +46,7 @@ export default {
 
     if (!profile) {
       const who = targetUser.id === interaction.user.id ? 'Ton compte Discord' : 'Ce compte Discord';
-      await interaction.reply({ content: `${who} n'est pas lié à ZIK. Tape \`/link\` pour lier le tien !`, ephemeral: true });
+      await interaction.reply({ content: `${who} n'est pas lié à ZIK. Tape \`/link\` pour lier le tien !`, flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -61,7 +61,7 @@ export default {
     const collector = msg.createMessageComponentCollector({ time: 120_000 });
     collector.on('collect', async (btn) => {
       if (btn.user.id !== interaction.user.id) {
-        await btn.reply({ content: 'Ce n\'est pas ta commande.', ephemeral: true });
+        await btn.reply({ content: 'Ce n\'est pas ta commande.', flags: MessageFlags.Ephemeral });
         return;
       }
       if (btn.customId === 'stats_prev' && page > 0) page--;

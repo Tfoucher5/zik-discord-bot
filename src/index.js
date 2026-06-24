@@ -1,10 +1,10 @@
-import { Client, GatewayIntentBits, Collection, Partials } from 'discord.js';
+import { Client, GatewayIntentBits, Collection, MessageFlags } from 'discord.js';
 import 'dotenv/config';
 import linkCmd from './commands/link.js';
 import statsCmd from './commands/stats.js';
 import classementCmd from './commands/classement.js';
 import roomsCmd from './commands/rooms.js';
-import zikStartCmd, { handleDmAnswer } from './commands/zik-start.js';
+import zikStartCmd, { handleThreadAnswer, threadPlayerMap } from './commands/zik-start.js';
 import zikStopCmd from './commands/zik-stop.js';
 import zikSkipCmd from './commands/zik-skip.js';
 import { stopAudio, leaveVoice } from './lib/audio.js';
@@ -14,9 +14,9 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildVoiceStates,
-    GatewayIntentBits.DirectMessages,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent, // intent privilégié — à activer dans le portail Discord
   ],
-  partials: [Partials.Channel], // nécessaire pour recevoir les DMs
 });
 
 client.commands = new Collection();
@@ -24,14 +24,23 @@ for (const cmd of [linkCmd, statsCmd, classementCmd, roomsCmd, zikStartCmd, zikS
   client.commands.set(cmd.name, cmd);
 }
 
-client.on('ready', () => console.log(`Bot en ligne : ${client.user.tag}`));
+client.once('clientReady', () => console.log(`Bot en ligne : ${client.user.tag}`));
+
+client.on('error', (err) => console.error('[Client Error]:', err.message));
 
 client.on('messageCreate', async (msg) => {
-  if (msg.author.bot || msg.guild) return; // DMs uniquement
-  await handleDmAnswer(msg);
+  if (msg.author.bot) return;
+  if (msg.channel?.isThread?.()) {
+    await handleThreadAnswer(msg).catch(console.error);
+  }
 });
 
 client.on('interactionCreate', async (interaction) => {
+  if (interaction.isAutocomplete()) {
+    const cmd = client.commands.get(interaction.commandName);
+    if (cmd?.autocomplete) await cmd.autocomplete(interaction).catch(console.error);
+    return;
+  }
   if (!interaction.isChatInputCommand()) return;
   const cmd = client.commands.get(interaction.commandName);
   if (!cmd) return;
@@ -39,7 +48,7 @@ client.on('interactionCreate', async (interaction) => {
     await cmd.execute(interaction);
   } catch (err) {
     console.error(err);
-    const msg = { content: 'Une erreur est survenue.', ephemeral: true };
+    const msg = { content: 'Une erreur est survenue.', flags: MessageFlags.Ephemeral };
     if (interaction.replied || interaction.deferred) await interaction.followUp(msg);
     else await interaction.reply(msg);
   }
@@ -59,15 +68,19 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
   ).length;
 
   if (remainingPlayers === 0) {
-    // Plus personne dans le vocal → arrêt après 60s
     clearTimeout(state._emptyTimeout);
     state._emptyTimeout = setTimeout(async () => {
-      const thread = await oldState.client.channels.fetch(state.threadId).catch(() => null);
-      await thread?.send('👋 Tous les joueurs ont quitté le vocal. Partie arrêtée.').catch(() => {});
+      await state._mainChannel?.send('👋 Tous les joueurs ont quitté le vocal. Partie arrêtée.').catch(() => {});
       stopAudio(state.audioPlayer);
       leaveVoice(state.voiceConnection);
-      const { dmPlayerMap } = await import('./commands/zik-start.js');
-      for (const [userId] of state.players) dmPlayerMap.delete(userId);
+      for (const [, player] of state.players) {
+        if (player.threadChannel) {
+          threadPlayerMap.delete(player.threadChannel.id);
+          player.threadChannel.delete().catch(() => {
+            player.threadChannel.setArchived(true).catch(() => {});
+          });
+        }
+      }
       await endGame(state, guildId);
     }, 60_000);
   }

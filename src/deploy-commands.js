@@ -22,9 +22,10 @@ const commands = [
     options: [
       {
         name: 'room',
-        description: 'Code d\'une room (optionnel)',
+        description: 'Nom d\'une room (optionnel)',
         type: 3, // STRING
         required: false,
+        autocomplete: true,
       },
       {
         name: 'mode',
@@ -58,6 +59,7 @@ const commands = [
         description: 'Nom de la playlist (optionnel)',
         type: 3, // STRING
         required: false,
+        autocomplete: true,
       },
       {
         name: 'rounds',
