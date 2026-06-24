@@ -12,17 +12,41 @@ export function joinVoice(channel) {
     channelId: channel.id,
     guildId: channel.guild.id,
     adapterCreator: channel.guild.voiceAdapterCreator,
+    selfDeaf: true,
+    selfMute: false,
   });
 
   const player = createAudioPlayer();
 
+  let stuckTimer = null;
+  let rejoinCount = 0;
+
   connection.on('stateChange', (oldState, newState) => {
     console.log(`[Connexion] ${oldState.status} => ${newState.status}`);
+    clearTimeout(stuckTimer);
+    stuckTimer = null;
+
     if (newState.status === VoiceConnectionStatus.Ready) {
-      console.log('[Connexion] Ready — audio activé');
+      console.log('[Connexion] Prêt — audio activé');
+      rejoinCount = 0;
     }
+
+    // Si bloqué en signalling après une redirection, forcer un rejoin
+    if (newState.status === VoiceConnectionStatus.Signalling) {
+      stuckTimer = setTimeout(() => {
+        if (connection.state.status !== VoiceConnectionStatus.Signalling) return;
+        if (rejoinCount >= 5) {
+          console.error('[Connexion] Trop de tentatives de rejoin — abandon');
+          return;
+        }
+        rejoinCount++;
+        console.log(`[Connexion] Bloqué en signalling — rejoin #${rejoinCount}`);
+        connection.rejoin();
+      }, 5_000);
+    }
+
     if (newState.status === VoiceConnectionStatus.Destroyed) {
-      console.log('[Connexion] Détruite');
+      clearTimeout(stuckTimer);
     }
   });
 
@@ -37,27 +61,10 @@ export function joinVoice(channel) {
   });
 
   connection.subscribe(player);
-
-  // Tenter la reconnexion automatique si le signal se perd
-  connection.on('stateChange', async (_, newState) => {
-    if (newState.status === VoiceConnectionStatus.Disconnected) {
-      try {
-        await Promise.race([
-          entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
-          entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
-        ]);
-        // Discord redirige — laisser @discordjs/voice gérer
-      } catch {
-        connection.destroy();
-      }
-    }
-  });
-
   return { connection, player };
 }
 
 export async function playPreview(player, previewUrl) {
-  // Attendre que le player soit libre (round précédent)
   await entersState(player, AudioPlayerStatus.Idle, 5_000).catch(() => {});
 
   const resource = createAudioResource(previewUrl);
