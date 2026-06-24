@@ -360,16 +360,9 @@ async function startWithPlaylist(interaction, guildId, voiceChannel, playlist, t
 
     state.onRoundEnd = (track) => revealRound(state, guildId, track);
 
-    try {
-      const { connection, player } = await joinVoice(voiceChannel);
-      state.voiceConnection = connection;
-      state.audioPlayer = player;
-    } catch (e) {
-      console.error('[joinVoice] échec:', e.message);
-      await interaction.channel.send('⚠️ Impossible de rejoindre le salon vocal (timeout 30s). Partie annulée.').catch(() => {});
-      activeGames.delete(guildId);
-      return;
-    }
+    const { connection, player } = joinVoice(voiceChannel);
+    state.voiceConnection = connection;
+    state.audioPlayer = player;
 
     await runRound(state, guildId);
   };

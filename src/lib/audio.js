@@ -7,8 +7,7 @@ import {
   entersState,
 } from '@discordjs/voice';
 
-// Async : attend que la connexion soit Ready avant de retourner
-export async function joinVoice(channel) {
+export function joinVoice(channel) {
   const connection = joinVoiceChannel({
     channelId: channel.id,
     guildId: channel.guild.id,
@@ -19,10 +18,18 @@ export async function joinVoice(channel) {
 
   connection.on('stateChange', (oldState, newState) => {
     console.log(`[Connexion] ${oldState.status} => ${newState.status}`);
+    if (newState.status === VoiceConnectionStatus.Ready) {
+      console.log('[Connexion] Ready — audio activé');
+    }
+    if (newState.status === VoiceConnectionStatus.Destroyed) {
+      console.log('[Connexion] Détruite');
+    }
   });
 
   player.on('stateChange', (oldState, newState) => {
-    console.log(`[Player] ${oldState.status} => ${newState.status}`);
+    if (oldState.status !== newState.status) {
+      console.log(`[Player] ${oldState.status} => ${newState.status}`);
+    }
   });
 
   player.on('error', (error) => {
@@ -31,15 +38,26 @@ export async function joinVoice(channel) {
 
   connection.subscribe(player);
 
-  // 30s pour laisser le temps à Discord de rediriger vers un autre serveur vocal
-  await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
-  console.log('[Connexion] Ready');
+  // Tenter la reconnexion automatique si le signal se perd
+  connection.on('stateChange', async (_, newState) => {
+    if (newState.status === VoiceConnectionStatus.Disconnected) {
+      try {
+        await Promise.race([
+          entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
+          entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
+        ]);
+        // Discord redirige — laisser @discordjs/voice gérer
+      } catch {
+        connection.destroy();
+      }
+    }
+  });
 
   return { connection, player };
 }
 
-// La connexion est déjà Ready quand cette fonction est appelée
 export async function playPreview(player, previewUrl) {
+  // Attendre que le player soit libre (round précédent)
   await entersState(player, AudioPlayerStatus.Idle, 5_000).catch(() => {});
 
   const resource = createAudioResource(previewUrl);
