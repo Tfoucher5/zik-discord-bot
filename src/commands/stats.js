@@ -16,7 +16,7 @@ async function fetchProfile(discordId) {
 async function fetchModeStats(userId, mode) {
   const { data } = await supabase
     .from('game_players')
-    .select('score, rank')
+    .select('score, rank, games!inner(mode)')
     .eq('user_id', userId)
     .eq('games.mode', mode)
     .not('rank', 'is', null);
@@ -41,16 +41,16 @@ function buildRow(page) {
 export default {
   name: 'stats',
   async execute(interaction) {
-    await interaction.deferReply();
-
     const targetUser = interaction.options.getUser('joueur') ?? interaction.user;
     const profile = await fetchProfile(targetUser.id);
 
     if (!profile) {
       const who = targetUser.id === interaction.user.id ? 'Ton compte Discord' : 'Ce compte Discord';
-      await interaction.editReply({ content: `${who} n'est pas lié à ZIK. Tape \`/link\` pour lier le tien !`, ephemeral: true });
+      await interaction.reply({ content: `${who} n'est pas lié à ZIK. Tape \`/link\` pour lier le tien !`, ephemeral: true });
       return;
     }
+
+    await interaction.deferReply();
 
     profile.classicStats = await fetchModeStats(profile.id, 'classic');
     profile.qcmStats = await fetchModeStats(profile.id, 'qcm');
