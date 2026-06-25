@@ -98,6 +98,15 @@ async function runRound(state, guildId) {
     .setColor(0x3ecfff);
   for (const player of state.players.values()) player.threadChannel?.send({ embeds: [embed] }).catch(() => {});
 
+  if (state.mode === 'qcm') {
+    const { choices, correctChoiceIndex } = makeChoices(track, state.tracks);
+    state.correctChoiceIndex = correctChoiceIndex;
+    const row = new ActionRowBuilder().addComponents(
+      choices.map((c, i) => new ButtonBuilder().setCustomId(`qcm_${state.currentRound}_${i}`).setLabel(c.slice(0, 80)).setStyle(ButtonStyle.Secondary)),
+    );
+    for (const player of state.players.values()) player.threadChannel?.send({ content: '❓ Quel est ce titre ?', components: [row] }).catch(() => {});
+  }
+
   if (track.preview_url) {
     playPreview(state.audioPlayer, track.preview_url).catch((e) => {
       console.error('[audio] playPreview error:', e?.message ?? e);
@@ -181,6 +190,28 @@ export async function handleThreadAnswer(msg) {
     await msg.react('❌').catch(() => {});
   }
 
+  if (allPlayersDone(state)) {
+    clearTimeout(state.roundTimeout);
+    revealRound(state, entry.guildId, state.tracks[state.currentRound - 1]);
+  }
+}
+
+export async function handleQcmButton(interaction) {
+  const entry = threadPlayerMap.get(interaction.channelId);
+  if (!entry) return;
+  const state = activeGames.get(entry.guildId);
+  if (!state || state.mode !== 'qcm') return;
+  if (interaction.user.id !== entry.userId) {
+    await interaction.reply({ content: 'Ce n\'est pas ton fil.', flags: MessageFlags.Ephemeral }).catch(() => {});
+    return;
+  }
+  const choiceIndex = parseInt(interaction.customId.split('_')[2], 10);
+  const result = submitChoice(state, entry.userId, choiceIndex);
+  if (!result) {
+    await interaction.reply({ content: 'Tu as déjà répondu.', flags: MessageFlags.Ephemeral }).catch(() => {});
+    return;
+  }
+  await interaction.update({ content: result.correct ? `✅ Bonne réponse ! +${result.points} pts` : '❌ Raté !', components: [] }).catch(() => {});
   if (allPlayersDone(state)) {
     clearTimeout(state.roundTimeout);
     revealRound(state, entry.guildId, state.tracks[state.currentRound - 1]);

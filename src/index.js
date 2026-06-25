@@ -7,7 +7,7 @@ import linkCmd from './commands/link.js';
 import statsCmd from './commands/stats.js';
 import classementCmd from './commands/classement.js';
 import roomsCmd from './commands/rooms.js';
-import zikStartCmd, { handleThreadAnswer, threadPlayerMap } from './commands/zik-start.js';
+import zikStartCmd, { handleThreadAnswer, handleQcmButton, threadPlayerMap } from './commands/zik-start.js';
 import zikStopCmd from './commands/zik-stop.js';
 import zikSkipCmd from './commands/zik-skip.js';
 import { stopAudio, leaveVoice } from './lib/audio.js';
@@ -52,6 +52,10 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.isAutocomplete()) {
     const cmd = client.commands.get(interaction.commandName);
     if (cmd?.autocomplete) await cmd.autocomplete(interaction).catch(console.error);
+    return;
+  }
+  if (interaction.isButton() && interaction.customId.startsWith('qcm_')) {
+    await handleQcmButton(interaction).catch(console.error);
     return;
   }
   if (!interaction.isChatInputCommand()) return;
