@@ -86,6 +86,7 @@ function buildScoreLines(state) {
 }
 
 async function runRound(state, guildId) {
+  state._revealing = false;
   const roundData = nextRound(state);
   if (!roundData) { await finishGame(state, guildId); return; }
   const { track, roundIndex } = roundData;
@@ -118,6 +119,8 @@ async function runRound(state, guildId) {
 }
 
 async function revealRound(state, guildId, track) {
+  if (state._revealing) return;
+  state._revealing = true;
   clearTimeout(state.roundTimeout);
   stopAudio(state.audioPlayer);
 
@@ -172,6 +175,7 @@ export async function handleThreadAnswer(msg) {
   if (!entry) return;
   const state = activeGames.get(entry.guildId);
   if (!state || state.mode === 'qcm') return;
+  if (state.players.get(entry.userId)?._fullFoundCounted) return; // a déjà tout trouvé ce round
 
   const result = submitGuess(state, entry.userId, msg.content);
   if (!result) return;
