@@ -21,10 +21,8 @@ export function joinVoice(channel) {
   let stuckTimer = null;
   let rejoinCount = 0;
 
-  // Logging vocal concis : messages critiques + transitions réseau + code de fermeture WS vocal
-  connection.on('debug', (msg) => {
-    if (/error|close|fail|exception|ws\s|wss:|endpoint/i.test(msg)) console.log('[VoiceDebug]', msg);
-  });
+  // [DEBUG] tout logger pour diagnostiquer la connexion vocale
+  connection.on('debug', (msg) => console.log('[VoiceDebug]', msg));
   connection.on('error', (err) => console.error('[Connexion Error]', err?.message ?? err));
 
   const NET_STATE = ['OpeningWs', 'Identifying', 'UdpHandshaking', 'SelectingProtocol', 'Ready', 'Resuming', 'Closed'];
@@ -32,6 +30,7 @@ export function joinVoice(channel) {
   const instrumentNetworking = (net) => {
     if (!net || instrumented.has(net)) return;
     instrumented.add(net);
+    net.on('debug', (m) => console.log('[Net]', m));
     net.on('error', (e) => console.error('[Net Error]', e?.message ?? e));
     net.on('close', (code) => console.log('[Net] WS vocal fermé — code =', code));
     net.on('stateChange', (o, n) => {
@@ -86,12 +85,24 @@ export function joinVoice(channel) {
 export async function playPreview(player, previewUrl) {
   await entersState(player, AudioPlayerStatus.Idle, 5_000).catch(() => {});
 
+  // [DEBUG] tracer la source et la durée réelle de lecture (play -> idle)
+  console.log('[Audio] play URL:', previewUrl ? String(previewUrl).slice(0, 90) : 'NULL');
+  const startedAt = Date.now();
+
   const resource = createAudioResource(previewUrl);
   player.play(resource);
 
   return new Promise((resolve, reject) => {
-    const onIdle = () => { player.off('error', onError); resolve(); };
-    const onError = (err) => { player.off(AudioPlayerStatus.Idle, onIdle); reject(err); };
+    const onIdle = () => {
+      console.log(`[Audio] terminé après ${((Date.now() - startedAt) / 1000).toFixed(1)}s`);
+      player.off('error', onError);
+      resolve();
+    };
+    const onError = (err) => {
+      console.error('[Audio] resource error:', err?.message ?? err);
+      player.off(AudioPlayerStatus.Idle, onIdle);
+      reject(err);
+    };
     player.once(AudioPlayerStatus.Idle, onIdle);
     player.once('error', onError);
   });
