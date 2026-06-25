@@ -87,51 +87,42 @@ function buildScoreLines(state) {
 
 async function runRound(state, guildId) {
   const roundData = nextRound(state);
-  if (!roundData) {
-    await finishGame(state, guildId);
-    return;
-  }
-
+  if (!roundData) { await finishGame(state, guildId); return; }
   const { track, roundIndex } = roundData;
 
+  const targets = `artiste + titre${track.featArtists.length ? ' + feat(s)' : ''}${track.extraAnswers.length ? ' + bonus' : ''}`;
   const embed = new EmbedBuilder()
     .setTitle(`🎵 Round ${roundIndex + 1} / ${state.totalRounds}`)
-    .setDescription('🎧 Écoute et réponds dans ce fil !\n⏱️ 30 secondes')
+    .setDescription(`🎧 Réponds dans ce fil !\n⏱️ ${state.roundDuration}s · à trouver : **${targets}**`)
     .addFields({ name: 'Scores', value: buildScoreLines(state) })
     .setColor(0x3ecfff);
+  for (const player of state.players.values()) player.threadChannel?.send({ embeds: [embed] }).catch(() => {});
 
-  for (const player of state.players.values()) {
-    player.threadChannel?.send({ embeds: [embed] }).catch(() => {});
-  }
-
-  // Lancer l'audio en parallèle — le timer de 30s démarre immédiatement
   if (track.preview_url) {
     playPreview(state.audioPlayer, track.preview_url).catch((e) => {
       console.error('[audio] playPreview error:', e?.message ?? e);
-      for (const player of state.players.values()) {
-        player.threadChannel?.send('⚠️ Problème audio ce round — devine quand même !').catch(() => {});
-      }
+      for (const player of state.players.values()) player.threadChannel?.send('⚠️ Problème audio ce round — devine quand même !').catch(() => {});
     });
   }
 
-  state.roundTimeout = setTimeout(() => revealRound(state, guildId, track), 30_000);
+  state.roundTimeout = setTimeout(() => revealRound(state, guildId, track), state.roundDuration * 1000);
 }
 
 async function revealRound(state, guildId, track) {
   clearTimeout(state.roundTimeout);
   stopAudio(state.audioPlayer);
 
-  const titleDisplay = track.custom_title ?? track.title;
-  const artistDisplay = track.custom_artist ?? track.artist;
-
+  const featStr = track.featArtists.length ? ` feat. ${track.featArtists.join(', ')}` : '';
+  const extraStr = track.extraAnswers.length ? `\n📀 ${track.extraAnswers.map((e) => `${e.label}: ${e.value}`).join(' · ')}` : '';
+  const finder = state.firstFullFinder ? `\n⚡ 1er à tout trouver : **${state.firstFullFinder}**` : '';
   for (const [, player] of state.players) {
     player.threadChannel?.send(
-      `🎵 C'était **${titleDisplay}** — *${artistDisplay}*\n` +
-      (player.hasAnswered ? '✅ Bien joué !' : '❌ Pas trouvé cette fois.')
+      `🎵 C'était **${track.title}** — *${track.mainArtist}${featStr}*${extraStr}\n` +
+      (player._fullFoundCounted ? '✅ Tu as tout trouvé !' : '❌ Pas tout cette fois.') + finder
     ).catch(() => {});
   }
 
-  await new Promise(r => setTimeout(r, 4000));
+  await new Promise((r) => setTimeout(r, (state.pauseDuration ?? 5) * 1000));
   await runRound(state, guildId);
 }
 
@@ -170,34 +161,29 @@ async function finishGame(state, guildId) {
 export async function handleThreadAnswer(msg) {
   const entry = threadPlayerMap.get(msg.channelId);
   if (!entry) return;
-  const { guildId, userId } = entry;
-  const state = activeGames.get(guildId);
-  if (!state) return;
+  const state = activeGames.get(entry.guildId);
+  if (!state || state.mode === 'qcm') return;
 
-  const result = submitAnswer(state, userId, msg.content);
+  const result = submitGuess(state, entry.userId, msg.content);
   if (!result) return;
 
-  if (!result.correct) {
+  if (result.hits.length) {
+    await msg.react('✅').catch(() => {});
+    const icons = { artist: '🎤', title: '🎵', feat: '🎸', extra: '📀' };
+    const labels = { artist: 'Artiste', title: 'Titre', feat: 'Feat' };
+    const lines = result.hits.map((h) => `${icons[h.type] ?? '✅'} **${h.type === 'extra' ? h.label : labels[h.type]}** : ${h.value} (+${h.points})`);
+    if (result.full) lines.push('🎉 **Tout trouvé !**');
+    await msg.channel.send(lines.join('\n')).catch(() => {});
+  } else if (result.close.length) {
+    await msg.react('🔥').catch(() => {});
+    await msg.channel.send(`🔥 Tu chauffes sur **${result.close[0]}** !`).catch(() => {});
+  } else {
     await msg.react('❌').catch(() => {});
-    return;
   }
 
-  await msg.react('✅').catch(() => {});
-
-  const found = [...state.players.values()].filter(p => p.hasAnswered).length;
-  const total = state.players.size;
-
-  // Notifier les autres joueurs dans leurs fils respectifs
-  for (const [pId, player] of state.players) {
-    if (pId !== userId) {
-      player.threadChannel?.send(`✅ **${msg.author.username}** a trouvé ! (${found}/${total})`).catch(() => {});
-    }
-  }
-
-  if (result.allFound) {
+  if (allPlayersDone(state)) {
     clearTimeout(state.roundTimeout);
-    const track = state.tracks[state.currentRound - 1];
-    await state.onRoundEnd?.(track);
+    revealRound(state, entry.guildId, state.tracks[state.currentRound - 1]);
   }
 }
 
@@ -367,8 +353,6 @@ async function startWithPlaylist(interaction, guildId, voiceChannel, playlist, t
       activeGames.delete(guildId);
       return;
     }
-
-    state.onRoundEnd = (track) => revealRound(state, guildId, track);
 
     const { connection, player } = joinVoice(voiceChannel);
     state.voiceConnection = connection;
