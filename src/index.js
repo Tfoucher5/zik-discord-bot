@@ -12,6 +12,7 @@ import zikStopCmd from './commands/zik-stop.js';
 import zikSkipCmd from './commands/zik-skip.js';
 import { stopAudio, leaveVoice } from './lib/audio.js';
 import { activeGames, endGame } from './lib/game-engine.js';
+import { commands } from './commands-list.js';
 
 const client = new Client({
   intents: [
@@ -27,8 +28,21 @@ for (const cmd of [linkCmd, statsCmd, classementCmd, roomsCmd, zikStartCmd, zikS
   client.commands.set(cmd.name, cmd);
 }
 
-client.once('clientReady', () => {
+client.once('clientReady', async () => {
   console.log(`Bot en ligne : ${client.user.tag}`);
+
+  // Resynchronise les slash-commands en GLOBAL (tous les serveurs) à chaque démarrage.
+  // Plus besoin de `npm run deploy` manuel : chaque (re)déploiement Railway les met à jour.
+  try {
+    await client.application.commands.set(commands);
+    if (process.env.DISCORD_GUILD_ID) {
+      await client.application.commands.set([], process.env.DISCORD_GUILD_ID); // purge doublons guild
+    }
+    console.log(`Slash commands synchronisées globalement (${commands.length}).`);
+  } catch (err) {
+    console.error('[deploy] Échec de synchronisation des commandes :', err.message);
+  }
+
   // Log chaque message vocal brut reçu de Discord
   client.ws.on('VOICE_SERVER_UPDATE', (d) =>
     console.log(`[VSU] guild=${d.guild_id} endpoint=${d.endpoint ?? 'NULL'} token=${d.token ? 'ok' : 'MISSING'}`)
