@@ -6,6 +6,7 @@ import {
   VoiceConnectionStatus,
   entersState,
 } from '@discordjs/voice';
+import { Readable } from 'node:stream';
 
 export function joinVoice(channel) {
   const connection = joinVoiceChannel({
@@ -89,7 +90,13 @@ export async function playPreview(player, previewUrl) {
   console.log('[Audio] play URL:', previewUrl ? String(previewUrl).slice(0, 90) : 'NULL');
   const startedAt = Date.now();
 
-  const resource = createAudioResource(previewUrl);
+  // Télécharger la preview via Node (DNS/TLS fiables) au lieu de laisser FFmpeg
+  // faire la requête réseau : ffmpeg-static peut ne pas gérer HTTPS (cas Railway).
+  // FFmpeg ne fait alors que décoder le flux local.
+  const res = await fetch(previewUrl);
+  console.log(`[Audio] fetch status=${res.status} type=${res.headers.get('content-type')} len=${res.headers.get('content-length')}`);
+  if (!res.ok || !res.body) throw new Error(`preview HTTP ${res.status}`);
+  const resource = createAudioResource(Readable.fromWeb(res.body));
   player.play(resource);
 
   return new Promise((resolve, reject) => {
