@@ -21,14 +21,26 @@ export function joinVoice(channel) {
   let stuckTimer = null;
   let rejoinCount = 0;
 
-  // Filtrer pour ne garder que les messages critiques (WS URL, erreurs, codes de fermeture)
-  connection.on('debug', (msg) => {
-    if (/error|close|fail|exception|ws\s|wss:|endpoint/i.test(msg))
-      console.log('[VoiceDebug]', msg);
-  });
+  // [DEBUG TEMPORAIRE] tout logger + instrumenter le networking pour localiser l'échec (WS vocal vs UDP)
+  connection.on('debug', (msg) => console.log('[VoiceDebug]', msg));
+  connection.on('error', (err) => console.error('[Connexion Error]', err?.message ?? err));
+
+  const NET_STATE = ['OpeningWs', 'Identifying', 'UdpHandshaking', 'SelectingProtocol', 'Ready', 'Resuming', 'Closed'];
+  const instrumented = new WeakSet();
+  const instrumentNetworking = (net) => {
+    if (!net || instrumented.has(net)) return;
+    instrumented.add(net);
+    net.on('debug', (m) => console.log('[Net]', m));
+    net.on('error', (e) => console.error('[Net Error]', e?.message ?? e));
+    net.on('close', (code) => console.log('[Net] WS vocal fermé — code =', code));
+    net.on('stateChange', (o, n) => {
+      if (o.code !== n.code) console.log(`[Net état] ${NET_STATE[o.code] ?? o.code} => ${NET_STATE[n.code] ?? n.code}`);
+    });
+  };
 
   connection.on('stateChange', (oldState, newState) => {
     console.log(`[Connexion] ${oldState.status} => ${newState.status}`);
+    try { instrumentNetworking(newState.networking); } catch {}
     clearTimeout(stuckTimer);
     stuckTimer = null;
 
