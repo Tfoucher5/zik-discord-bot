@@ -56,7 +56,7 @@ describe('submitChoice (qcm)', () => {
     addPlayer(s, 'u', 'Theo', null);
     const r = submitChoice(s, 'u', 2);
     expect(r.correct).toBe(true);
-    expect(r.points).toBeGreaterThan(0);
+    expect(r.points).toBeGreaterThanOrEqual(990); // réponse quasi-immédiate ≈ 1000
     expect(submitChoice(s, 'u', 2)).toBeNull();
   });
 });
@@ -84,5 +84,30 @@ describe('endGame', () => {
     addPlayer(s, 'u', 'Theo', 'zik-uuid');
     await endGame(s, 'g');
     expect(supabase.rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe('nextRound', () => {
+  it('réinitialise les cibles, firstFullFinder, correctChoiceIndex et avance le round', () => {
+    const tracks = [buildTrack({ artist: 'A', title: 'T1' }), buildTrack({ artist: 'B', title: 'T2' })];
+    const s = createGame('g2', 'h', 'v', tracks, 2, 'classic', 30);
+    addPlayer(s, 'u', 'Theo', null);
+    s.currentRound = 1;
+    const p = s.players.get('u');
+    p.foundArtist = true; p.foundTitle = true; p._fullFoundCounted = true; p._qcmAnswered = true;
+    s.firstFullFinder = 'Theo'; s.correctChoiceIndex = 2;
+    const r = nextRound(s);
+    expect(r.roundIndex).toBe(1);
+    expect(s.currentRound).toBe(2);
+    expect(p.foundArtist).toBe(false);
+    expect(p.foundTitle).toBe(false);
+    expect(p._fullFoundCounted).toBe(false);
+    expect(p._qcmAnswered).toBe(false);
+    expect(s.firstFullFinder).toBeNull();
+    expect(s.correctChoiceIndex).toBeNull();
+  });
+  it('retourne null quand tous les rounds sont joués', () => {
+    const s = mkState();
+    expect(nextRound(s)).toBeNull();
   });
 });
