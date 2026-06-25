@@ -22,8 +22,10 @@ export function joinVoice(channel) {
   let stuckTimer = null;
   let rejoinCount = 0;
 
-  // [DEBUG] tout logger pour diagnostiquer la connexion vocale
-  connection.on('debug', (msg) => console.log('[VoiceDebug]', msg));
+  // Logging vocal concis : messages critiques + transitions réseau + code de fermeture
+  connection.on('debug', (msg) => {
+    if (/error|close|fail|exception|ws\s|wss:|endpoint/i.test(msg)) console.log('[VoiceDebug]', msg);
+  });
   connection.on('error', (err) => console.error('[Connexion Error]', err?.message ?? err));
 
   const NET_STATE = ['OpeningWs', 'Identifying', 'UdpHandshaking', 'SelectingProtocol', 'Ready', 'Resuming', 'Closed'];
@@ -31,7 +33,6 @@ export function joinVoice(channel) {
   const instrumentNetworking = (net) => {
     if (!net || instrumented.has(net)) return;
     instrumented.add(net);
-    net.on('debug', (m) => console.log('[Net]', m));
     net.on('error', (e) => console.error('[Net Error]', e?.message ?? e));
     net.on('close', (code) => console.log('[Net] WS vocal fermé — code =', code));
     net.on('stateChange', (o, n) => {
@@ -86,22 +87,16 @@ export function joinVoice(channel) {
 export async function playPreview(player, previewUrl) {
   await entersState(player, AudioPlayerStatus.Idle, 5_000).catch(() => {});
 
-  // [DEBUG] tracer la source et la durée réelle de lecture (play -> idle)
-  console.log('[Audio] play URL:', previewUrl ? String(previewUrl).slice(0, 90) : 'NULL');
-  const startedAt = Date.now();
-
-  // Télécharger la preview via Node (DNS/TLS fiables) au lieu de laisser FFmpeg
-  // faire la requête réseau : ffmpeg-static peut ne pas gérer HTTPS (cas Railway).
+  // Télécharger la preview via Node (DNS/TLS fiables) au lieu de laisser FFmpeg faire
+  // la requête réseau : ffmpeg-static ne gère pas toujours HTTPS (cas Railway).
   // FFmpeg ne fait alors que décoder le flux local.
   const res = await fetch(previewUrl);
-  console.log(`[Audio] fetch status=${res.status} type=${res.headers.get('content-type')} len=${res.headers.get('content-length')}`);
   if (!res.ok || !res.body) throw new Error(`preview HTTP ${res.status}`);
   const resource = createAudioResource(Readable.fromWeb(res.body));
   player.play(resource);
 
   return new Promise((resolve, reject) => {
     const onIdle = () => {
-      console.log(`[Audio] terminé après ${((Date.now() - startedAt) / 1000).toFixed(1)}s`);
       player.off('error', onError);
       resolve();
     };
