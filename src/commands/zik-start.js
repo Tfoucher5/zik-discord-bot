@@ -10,7 +10,9 @@ import {
 } from 'discord.js';
 import supabase from '../lib/supabase.js';
 import { joinVoice, playPreview, stopAudio, leaveVoice } from '../lib/audio.js';
-import { activeGames, createGame, addPlayer, nextRound, endGame, submitAnswer } from '../lib/game-engine.js';
+import { activeGames, createGame, addPlayer, nextRound, endGame, submitGuess, submitChoice, allPlayersDone } from '../lib/game-engine.js';
+import { buildTrack } from '../lib/track.js';
+import { makeChoices } from '../lib/scoring.js';
 
 // Map<threadId, { guildId, userId }> — pour router les messages de thread vers la bonne partie
 export const threadPlayerMap = new Map();
@@ -46,27 +48,34 @@ async function fetchPlaylists(search) {
 async function fetchTracks(playlistId, totalRounds) {
   const { data } = await supabase
     .from('custom_playlist_tracks')
-    .select('id, artist, title, preview_url, custom_artist, custom_title')
+    .select('id, artist, title, cover_url, preview_url, custom_artist, custom_title, custom_feats, track_answers(value, answer_types(name))')
     .eq('playlist_id', playlistId);
   if (!data?.length) return [];
 
-  const enriched = await Promise.all(data.map(async (track) => {
-    if (track.preview_url) return track;
-    const preview = await getDeezerPreview(
-      track.custom_artist ?? track.artist,
-      track.custom_title ?? track.title
-    );
-    return preview ? { ...track, preview_url: preview } : track;
+  const enriched = await Promise.all(data.map(async (row) => {
+    let preview_url = row.preview_url;
+    if (!preview_url) preview_url = await getDeezerPreview(row.custom_artist ?? row.artist, row.custom_title ?? row.title);
+    return { ...row, preview_url };
   }));
 
-  const withPreviews = enriched.filter(t => t.preview_url);
+  const withPreviews = enriched.filter((t) => t.preview_url);
   if (!withPreviews.length) return [];
 
   for (let i = withPreviews.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [withPreviews[i], withPreviews[j]] = [withPreviews[j], withPreviews[i]];
   }
-  return withPreviews.slice(0, totalRounds);
+
+  return withPreviews.slice(0, totalRounds).map((t) => buildTrack({
+    artist: t.artist,
+    title: t.title,
+    cover: t.cover_url,
+    preview_url: t.preview_url,
+    custom_artist: t.custom_artist,
+    custom_title: t.custom_title,
+    custom_feats: t.custom_feats,
+    extraAnswers: (t.track_answers || []).map((a) => ({ label: a.answer_types?.name || 'Bonus', value: a.value })),
+  }));
 }
 
 function buildScoreLines(state) {
@@ -229,6 +238,9 @@ export default {
 
     const totalRounds = interaction.options.getInteger('rounds') ?? 10;
     const playlistSearch = interaction.options.getString('playlist');
+    const mode = interaction.options.getString('mode') ?? 'classic';
+    const roundDuration = interaction.options.getInteger('duree') ?? 30;
+    const pauseDuration = interaction.options.getInteger('pause') ?? 5;
 
     await interaction.deferReply();
 
@@ -240,7 +252,7 @@ export default {
 
     // Autocomplete retourne un UUID → démarrer directement
     if (playlists.length === 1 || (playlistSearch && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(playlistSearch))) {
-      await startWithPlaylist(interaction, guildId, voiceChannel, playlists[0], totalRounds);
+      await startWithPlaylist(interaction, guildId, voiceChannel, playlists[0], totalRounds, mode, roundDuration, pauseDuration);
       return;
     }
 
@@ -265,7 +277,7 @@ export default {
       }
       const chosen = playlists.find(p => p.id === sel.values[0]);
       await sel.update({ content: `Playlist choisie : **${chosen.name}**`, components: [] });
-      await startWithPlaylist(interaction, guildId, voiceChannel, chosen, totalRounds);
+      await startWithPlaylist(interaction, guildId, voiceChannel, chosen, totalRounds, mode, roundDuration, pauseDuration);
     });
     collector.on('end', (collected) => {
       if (!collected.size) interaction.editReply({ content: 'Sélection annulée.', components: [] }).catch(() => {});
@@ -273,7 +285,7 @@ export default {
   },
 };
 
-async function startWithPlaylist(interaction, guildId, voiceChannel, playlist, totalRounds) {
+async function startWithPlaylist(interaction, guildId, voiceChannel, playlist, totalRounds, mode = 'classic', roundDuration = 30, pauseDuration = 5) {
   const tracks = await fetchTracks(playlist.id, totalRounds);
   if (!tracks.length) {
     await interaction.editReply({ content: `La playlist **${playlist.name}** n'a aucun titre avec aperçu audio (Deezer inclus).` });
@@ -281,19 +293,17 @@ async function startWithPlaylist(interaction, guildId, voiceChannel, playlist, t
   }
 
   const actualRounds = Math.min(tracks.length, totalRounds);
-  const state = createGame(guildId, interaction.user.id, null, voiceChannel.id, tracks, actualRounds);
+  const state = createGame(guildId, interaction.user.id, voiceChannel.id, tracks, actualRounds, mode, roundDuration);
+  state.pauseDuration = pauseDuration;
   state._guildId = guildId;
   state._mainChannel = interaction.channel;
-
-  clearTimeout(state.globalTimeout);
-  state.globalTimeout = setTimeout(() => endGame(state, guildId), 90 * 60 * 1000);
 
   const voiceMembers = [...voiceChannel.members.values()].filter(m => !m.user.bot);
 
   const lobbyEmbed = new EmbedBuilder()
     .setTitle(`🎮 Blind Test — ${playlist.name}`)
     .setDescription(
-      `**${actualRounds} rounds · Mode Classique**\n\n` +
+      `**${actualRounds} rounds · Mode ${mode === 'qcm' ? 'QCM' : 'Classique'}**\n\n` +
       `Participants :\n${voiceMembers.map(m => `• ${m.user.username}`).join('\n')}\n\n` +
       `⏱️ Démarrage dans 60s ou quand tout le monde est prêt.\n\n` +
       `0/${voiceMembers.length} prêts`

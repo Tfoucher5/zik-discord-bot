@@ -54,21 +54,16 @@ const commands = [
     name: 'zik-start',
     description: 'Lance une partie de Blind Test dans ton salon vocal',
     options: [
-      {
-        name: 'playlist',
-        description: 'Nom de la playlist (optionnel)',
-        type: 3, // STRING
-        required: false,
-        autocomplete: true,
-      },
-      {
-        name: 'rounds',
-        description: 'Nombre de rounds (1–20, défaut: 10)',
-        type: 4, // INTEGER
-        required: false,
-        min_value: 1,
-        max_value: 20,
-      },
+      { name: 'playlist', description: 'Nom de la playlist (optionnel)', type: 3, required: false, autocomplete: true },
+      { name: 'rounds', description: 'Nombre de rounds (1–20, défaut: 10)', type: 4, required: false, min_value: 1, max_value: 20 },
+      { name: 'mode', description: 'Mode de jeu (défaut: Classique)', type: 3, required: false, choices: [
+        { name: 'Classique (saisie)', value: 'classic' },
+        { name: 'QCM (choix multiple)', value: 'qcm' },
+      ] },
+      { name: 'duree', description: 'Durée d\'un round (défaut: 30s)', type: 4, required: false, choices: [
+        { name: '15s', value: 15 }, { name: '30s', value: 30 }, { name: '45s', value: 45 },
+      ] },
+      { name: 'pause', description: 'Pause entre rounds en s (défaut: 5)', type: 4, required: false, min_value: 3, max_value: 15 },
     ],
   },
   { name: 'zik-stop', description: 'Arrête la partie en cours' },
